@@ -1,7 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { privateProcedure, createTRPCRouter } from "../trpc";
 import { z } from "zod";
-import { uploadImage } from "../../../utils/uploadImage";
 
 export const postRouter = createTRPCRouter({
   create: privateProcedure
@@ -12,21 +11,33 @@ export const postRouter = createTRPCRouter({
         latitude: z.number(),
         longitude: z.number(),
         tokenWorth: z.number(),
-        image: z.string().min(1),
+        userId: z.string().min(1),
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const imageOutput = await uploadImage(input.image);
+      let userFound = await ctx.prisma.user.findUnique({
+        where: {
+          userId: input.userId,
+        },
+      });
 
-      ctx.prisma.post.create({
+      if (!userFound) {
+        userFound = await ctx.prisma.user.create({
+          data: {
+            userId: input.userId,
+            tokens: 0,
+          },
+        });
+      }
+
+      await ctx.prisma.post.create({
         data: {
           title: input.title,
           content: input.content,
           latitude: input.latitude,
           longitude: input.longitude,
-          authorId: ctx.user.userId!,
+          authorId: userFound.id,
           tokenWorth: input.tokenWorth,
-          image: imageOutput.data.url,
         },
       });
     }),
@@ -35,6 +46,7 @@ export const postRouter = createTRPCRouter({
     .input(
       z.object({
         postId: z.string().min(1),
+        userId: z.string().min(1),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -56,14 +68,14 @@ export const postRouter = createTRPCRouter({
 
       let userFound = await ctx.prisma.user.findUnique({
         where: {
-          id: ctx.user.userId!,
+          userId: input.userId,
         },
       });
 
       if (!userFound) {
         userFound = await ctx.prisma.user.create({
           data: {
-            id: ctx.user.userId!,
+            userId: input.userId,
             tokens: 0,
           },
         });
@@ -71,10 +83,10 @@ export const postRouter = createTRPCRouter({
 
       await ctx.prisma.user.update({
         where: {
-          id: ctx.user.userId!,
+          userId: input.userId,
         },
         data: {
-          tokens: userFound.tokens + post!.tokenWorth,
+          tokens: userFound.tokens + post.tokenWorth,
         },
       });
     }),
@@ -82,4 +94,20 @@ export const postRouter = createTRPCRouter({
   get: privateProcedure.query(({ ctx }) => {
     return ctx.prisma.post.findMany();
   }),
+
+  tokens: privateProcedure
+    .input(z.object({ userId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => {
+      const userFound = await ctx.prisma.user.findUnique({
+        where: {
+          userId: input.userId,
+        },
+      });
+
+      if (!userFound) {
+        return 0;
+      }
+
+      return userFound.tokens;
+    }),
 });

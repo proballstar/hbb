@@ -35,7 +35,7 @@ type CreateContextOptions = CreateNextContextOptions;
 const createInnerTRPCContext = (_opts: CreateContextOptions) => {
   return {
     prisma,
-    user: getAuth(_opts.req),
+    // user: getAuth(_opts.req),
   };
 };
 
@@ -102,13 +102,11 @@ export const publicProcedure = t.procedure;
 
 export const privateProcedure = t.procedure.use(
   t.middleware(({ next, ctx }) => {
-    if (!ctx.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
+    // if (!ctx.user?.userId) {
+    //   throw new TRPCError({ code: "UNAUTHORIZED" });
+    // }
     return next({
-      ctx: {
-        user: ctx.user,
-      },
+      ctx,
     });
   })
 );

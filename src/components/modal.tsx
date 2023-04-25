@@ -1,4 +1,5 @@
-import React, { AnchorHTMLAttributes, useEffect, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom";
 import styled from "styled-components";
 import { api } from "~/utils/api";
@@ -11,15 +12,16 @@ interface GeoSphere {
 interface TestAttributes {
   t: string;
   desc: string;
-  pnds: number;
+  pnds: string;
 }
 
-const Modal = ({ show, onClose }: { show: boolean; onClose: any;}) => {
+const Modal = ({ show, onClose }: { show: boolean; onClose: () => any }) => {
   const [isBrowser, setIsBrowser] = useState(false);
-  const [geo, setGeo] = useState<GeoSphere>({lat: 0, lng: 0})
-  const [ta, setTa] = useState<TestAttributes>({t: '', desc: '', pnds: 0})
-  const [f, setF] = useState<File | undefined>(undefined)
-  const postMutation = api.post.create.useMutation()
+  const [geo, setGeo] = useState<GeoSphere>({ lat: 0, lng: 0 });
+  const [ta, setTa] = useState<TestAttributes>({ t: "", desc: "", pnds: "" });
+  const postMutation = api.post.create.useMutation();
+
+  const auth = useAuth();
 
   useEffect(() => {
     setIsBrowser(true);
@@ -28,34 +30,29 @@ const Modal = ({ show, onClose }: { show: boolean; onClose: any;}) => {
   const handleCloseClick = (e: any) => {
     onClose();
   };
-  
+
   function auto_loc() {
     navigator.geolocation.getCurrentPosition(
-      pos => {
+      (pos) => {
         setGeo({
           lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        })
-      }, err => console.error(err)
-    )
+          lng: pos.coords.longitude,
+        });
+      },
+      (err) => console.error(err)
+    );
   }
 
   async function addPost() {
-    let a = "" as any
-    var reader = new FileReader()
-
-    reader.readAsDataURL(f!)
-    reader.onload = () => {
-      let a = reader.result
-    }
     await postMutation.mutateAsync({
       content: ta.desc,
       latitude: geo.lat,
       longitude: geo.lng,
       title: ta.t,
-      tokenWorth: ta.pnds,
-      image: String(a)
-    })
+      tokenWorth: parseInt(ta.pnds, 10),
+      userId: auth.userId!,
+    });
+    window.location.reload();
   }
 
   const modalContent = show ? (
@@ -67,47 +64,34 @@ const Modal = ({ show, onClose }: { show: boolean; onClose: any;}) => {
           </a>
         </StyledModalHeader>
         <StyledModalBody>
-            <input
-               className="bg-gray-200 w-full rounded-lg shadow border p-2"
-               placeholder="Item Title"
-               onChange={e => setTa(prev => ({...prev, t: e.target.value}))}
-               value={ta.t}
-            />
-            <input
-               className="bg-gray-200 w-full rounded-lg shadow border p-2"
-               placeholder="Item Title"
-               onChange={e => setTa(prev => ({...prev, desc: e.target.value}))}
-               value={ta.pnds}
-            />
-            <input
-               className="bg-gray-200 w-full rounded-lg shadow border p-2"
-               placeholder="Weight (lbs)"
-               type="number"
-               onChange={e => setTa(prev => ({...prev, pnds: parseInt(e.target.value)}))}
-               value={ta.pnds}
-            />
-            <input
-               className="bg-gray-200 w-full rounded-lg shadow border p-2"
-               placeholder="Weight (lbs)"
-               type="file"
-               multiple={false}
-               onChange={e => setF(e.target.files![0])}
-            />
-            <textarea
-               className="bg-gray-200 w-full rounded-lg shadow border p-2"
-               rows={5}
-               placeholder="Item Description"
-               onChange={val => setTa(prev => ({...prev, desc: val.target.value}))}
-               value={ta.desc}
-            />
-            {JSON.stringify(geo)}
-            {JSON.stringify(ta)}
-            <button onClick={auto_loc}>
-                Autocomplete Location
-            </button>
-            <button onClick={addPost}>
-              Submit
-            </button>
+          <input
+            className="w-full rounded-lg border bg-gray-200 p-2 shadow"
+            placeholder="Item Title"
+            onChange={(e) => setTa((prev) => ({ ...prev, t: e.target.value }))}
+            value={ta.t}
+          />
+          <input
+            className="w-full rounded-lg border bg-gray-200 p-2 shadow"
+            placeholder="Weight (lbs)"
+            type="text"
+            onChange={(e) =>
+              setTa((prev) => ({ ...prev, pnds: e.target.value }))
+            }
+            value={ta.pnds}
+          />
+          <textarea
+            className="w-full rounded-lg border bg-gray-200 p-2 shadow"
+            rows={5}
+            placeholder="Item Description"
+            onChange={(val) =>
+              setTa((prev) => ({ ...prev, desc: val.target.value }))
+            }
+            value={ta.desc}
+          />
+          <div className="flex flex-col">
+            <button className="px-5 py-2 text-white bg-red-500 rounded-md shadow-md border border-gray-600" onClick={auto_loc}>Autocomplete Location</button> {"\n"}
+            <button className="px-5 py-2 text-white bg-blue-500 rounded-md shadow-md border border-gray-600" onClick={() => void addPost()}>Submit</button>
+          </div>
         </StyledModalBody>
       </StyledModal>
     </StyledModalOverlay>

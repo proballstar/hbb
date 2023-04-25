@@ -1,117 +1,130 @@
 import Head from "next/head";
 import Image from "next/image";
-import styles from '../styles/home.module.css'
+import styles from "../styles/home.module.css";
 import { Dispatch, SetStateAction, useMemo, useState } from "react";
-import { useLoadScript, GoogleMap, MarkerF, InfoBox } from "@react-google-maps/api";
-import Modal from '../components/modal'
+import {
+  useLoadScript,
+  GoogleMap,
+  MarkerF,
+  InfoBox,
+} from "@react-google-maps/api";
+import Modal from "../components/modal";
 import { api } from "~/utils/api";
+import { SignInButton, UserButton, useAuth } from "@clerk/nextjs";
 
+interface Point {
+  geo: {
+    lat: number;
+    lng: number;
+  };
+  desc: string;
+  title: string;
+}
 
-export default function Home() {
+function Container() {
+  const postsQuery = api.post.get.useQuery();
+  const takeQuery = api.post.take.useMutation();
+  const mapCenter = useMemo(() => ({ lat: 37.77, lng: -110.42 }), []);
+  const [el, setEl] = useState<React.ReactElement | null>(null);
+  const [open, setOpen] = useState<boolean>(false);
 
-  const postsQuery = api.post.get.useQuery()
-  const takeQuery = api.post.take.useMutation()
-  
-  const libraries = useMemo(
-    () => ['places'],
-    []
-  )
-  
-  const mapCenter = useMemo(
-    () => ({ lat: 37.77, lng: -110.42 }),
-    []
-  )
-  
+  const auth = useAuth();
+
+  const userQuery = api.post.tokens.useQuery(
+    {
+      userId: auth.userId!,
+    },
+    {
+      enabled: !!auth.userId,
+    }
+  );
+
   const mapOptions = useMemo<google.maps.MapOptions>(
     () => ({
       disableDefaultUI: true,
       clickableIcons: true,
       scrollwheel: true,
-      zoomControl: true 
+      zoomControl: true,
     }),
     []
-  )
-  
+  );
+
+  return (
+    <div className={styles.homeWrapper}>
+      <div className="flex flex-row">
+        <div className="flex-shrink-0">
+          <GoogleMap
+            options={mapOptions}
+            zoom={8}
+            center={mapCenter}
+            mapTypeId={google.maps.MapTypeId.ROADMAP}
+            mapContainerStyle={{ width: "800px", height: "800px" }}
+            onLoad={() => console.log("Map Component Loaded...")}
+          >
+            <>
+              {Array.isArray(postsQuery.data) &&
+                postsQuery.data.map((v, k) => {
+                  return (
+                    <>
+                      <MarkerF
+                        key={`gmap-marker-${v.latitude}-${v.longitude}-${k}`}
+                        position={{
+                          lat: v.latitude,
+                          lng: v.longitude,
+                        }}
+                        onClick={() => {
+                          setEl(
+                            <div className="m-3 w-full rounded-md border border-gray-800 bg-slate-200 p-5 shadow-md">
+                              <h1>
+                                {v.title} by @{v.authorId}v
+                              </h1>
+                              <div>{v.content}</div>
+                              <button
+                                className="rounded-md bg-green-600 p-3 px-5 text-gray-800 shadow-md"
+                                onClick={() => {
+                                  takeQuery.mutate({
+                                    postId: v.id,
+                                    userId: auth.userId!,
+                                  });
+                                  location.reload();
+                                }}
+                              >
+                                Collect {v.tokenWorth} pounds of food
+                              </button>
+                            </div>
+                          );
+                        }}
+                      />
+                    </>
+                  );
+                })}
+            </>
+          </GoogleMap>
+        </div>
+        <div className="p-5">
+          {auth.isSignedIn ? <UserButton /> : <SignInButton />}
+          {(auth.isSignedIn && userQuery.data) ? <div>{userQuery.data}</div> : null}
+          <button onClick={(e) => setOpen(true)}>Open Modal</button>
+          <Modal onClose={() => setOpen(false)} show={open} />
+          {el}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Home() {
+  const libraries = useMemo(() => ["places"], []);
+
   const { isLoaded } = useLoadScript({
     googleMapsApiKey: process.env.NEXT_PUBLIC_LOCAL_KEY as string,
-    libraries: libraries as any
-  })
-  
+    libraries: libraries as any,
+  });
+
   function Loaded() {
-    return (
-      <div>
-        Loading...
-      </div>
-    )
+    return <div>Loading...</div>;
   }
-  
-  
-  interface Point {
-    geo: {
-      lat: number;
-      lng: number;
-    }
-    desc: string;
-    title: string;
-  }
-  
-  function Container() {
-    
-    const [points, setPoints] = useState<Point[]>([]);
-    const [open, setOpen] = useState<boolean>(false);
-    
-    
-    
-    return (
-      <div className={styles.homeWrapper}>
-        <Modal onClose={() => setOpen(false)} show={open} />
-        
-        <div className={styles.sidebar}>
-          <button onClick={e => setOpen(true)}>
-            Open Modal
-          </button>
-        </div>
-        <GoogleMap
-          options={mapOptions}
-          zoom={8}
-          center={mapCenter}
-          mapTypeId={google.maps.MapTypeId.ROADMAP}
-          mapContainerStyle={{ width: '800px', height: '800px' }}
-          onLoad={() => console.log('Map Component Loaded...')}
-        >
-  
-            {Array.isArray(postsQuery.data) && postsQuery.data.map((v, k) => {
-              return (
-                <>
-                <MarkerF 
-                  key={`gmap-marker-${v.latitude}-${v.longitude}-${k}`} 
-                  position={{
-                    lat: v.latitude,
-                    lng: v.longitude
-                  }} 
-                />
-                <InfoBox 
-                  position={{
-                    lat: () => v.latitude,
-                    lng: () => v.longitude
-                  }} 
-                >
-                  <h1>{v.title} by @{v.authorId}v</h1>
-                  <div>
-                    {v.content}
-                  </div>
-                  <button onClick={() => takeQuery.mutate({postId: v.id})}>
-                    Collect {v.tokenWorth} pounds of food 
-                  </button>
-                </InfoBox>
-              </>
-              )
-            })}
-      </GoogleMap>
-    </div>
-    )
-  }
-  
+
   return (
     <>
       <Head>
@@ -120,7 +133,7 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-     {!isLoaded ? <Loaded />: <Container />}
+      {!isLoaded ? <Loaded /> : <Container />}
     </>
   );
 }
